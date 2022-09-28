@@ -17,9 +17,10 @@ else
 	echo "A directory must be received" ; exit 1
 fi
 
-for ELEMENT in $(find $DIR -name "*.sh")
+for ELEMENT in $(find $DIR -name ".sh")
 do
 	chmod u+x $ELEMENT
+	echo prueba
 done
 
 exit 0;
