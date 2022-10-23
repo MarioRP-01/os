@@ -38,24 +38,28 @@ remove_bigger() {
 } 
 
 compress() {
-  if ! test -d $1 ; then
+  if ! test -d $2 ; then
     return
   fi
-  echo $1"/*"
-  tar -cf comp.tar $1"/*"
+  cd $2
+  echo $PWD
+  tar -cf $1 ./*
 }
 
 file_comp=$1
 temp=$(mktemp -dt activity_6_XXX)
 
-# I don't understand why this doesn't get my parameters
 extract $file_comp $temp
 ls $temp
+echo
 
 remove_bigger $temp
 ls $temp
+echo
 
-compress $temp
-ls
+compress $file_comp $temp
+ls $temp
+echo tar -tf $temp"/comp.tar"
+tar -tf $temp"/comp.tar"
 
 clear_temp $temp
