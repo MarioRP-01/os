@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../lib/libreria.h"
+#include "../test/libreria.h"
 
 int isNatural(char * number);
 
 int main(int argc, char *argv[])
 {
   int number_of_parameters = argc - 1;
-  char * function_name;
+  char * function_name = argv[1];
   int N = 10;
 
   if (number_of_parameters < 1 || number_of_parameters > 2) {
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
   }
 
   if (number_of_parameters == 2  && !isNatural(argv[number_of_parameters])) {
-    printf("The second paramter must be a Natural number");
+    printf("The second paramter must be a Natural number\n");
     return 1;
   }  
 
@@ -27,13 +27,11 @@ int main(int argc, char *argv[])
     N = atoi(argv[number_of_parameters]);
   }
 
-  function_name = argv[1];
-
-  if (strcmp(function_name, "head")) head(N); 
-  else if (strcmp(function_name, "tail")) tail(N);
-  else if (strcmp(function_name, "longlines")) longlines(N);
+  if (!strcmp(function_name, "head")) head(N); 
+  else if (!strcmp(function_name, "tail")) tail(N);
+  else if (!strcmp(function_name, "longlines")) longlines(N);
   else {
-    printf("The first parameter must be a valid funcion (head, tail, longlines).");
+    printf("The first parameter must be a valid funcion (head, tail, longlines).\n");
     return 1;
   }
   return 0;

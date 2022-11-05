@@ -15,8 +15,6 @@ objects = $(target_dir)/
 
 all: $(target_dir) test
 
-test: 
-
 $(libraries): 
 
 $(target_dir):
@@ -24,3 +22,21 @@ $(target_dir):
 	
 clean:
 	rm -r $(target_dir)
+
+# TEST
+
+run: clean_test set_test
+	gcc -c test/libreria.c -o test/libreria.o
+	ar -rv test/liblibreria.a test/libreria.o
+	gcc -o test/test test/test.c -iquote ./test -L ./test -llibreria
+
+.PHONY: run set_test clean_test
+
+set_test: test
+	cp lib/* src/* test
+
+test:
+	mkdir test
+
+clean_test:
+	rm -r test
