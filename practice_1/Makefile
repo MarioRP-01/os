@@ -1,27 +1,25 @@
 CC = gcc
 
-executable = test
 
-target_dir = dist
+obj_dir = dist/target
+exe_dir = dist
 lib_dir = lib
 src_dir = src
 
-libraries = $(wildcard $(lib_dir)/*.h)
-sources = $(wildcard $(src_dir)/*.c)
 libraries_name = 
 sources_name = 
 
 objects = $(target_dir)/
 
-all: $(target_dir) test
+all: $(target_dir) $(exe_dir)/test
 
-$(libraries): 
+$(exe_dir)/test: $(src_dir)/test 
 
-$(target_dir):
-	mkdir $(target_dir)
+$(obj_dir):
+	mkdir -p $(obj_dir)
 	
 clean:
-	rm -r $(target_dir)
+	rm -r $(obj_dir)
 
 # TEST
 
