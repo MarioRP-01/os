@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../test/libreria.h"
+#include "../lib/libreria.h"
 
 int isNatural(char * number);
 

@@ -1,19 +1,25 @@
 CC = gcc
 
-
 obj_dir = dist/target
 exe_dir = dist
 lib_dir = lib
 src_dir = src
 
-libraries_name = 
-sources_name = 
+all: $(obj_dir) test_exe
 
-objects = $(target_dir)/
+test_exe: $(exe_dir)/test
+	ln -s $(exe_dir)/test test_exe
 
-all: $(target_dir) $(exe_dir)/test
+$(exe_dir)/test: $(src_dir)/test.c $(lib_dir)/liblibreria.a 
+	gcc -o $(exe_dir)/test $(src_dir)/test.c \
+		-iquote $(lib_dir) \
+		-L $(lib_dir) -llibreria
 
-$(exe_dir)/test: $(src_dir)/test 
+$(lib_dir)/liblibreria.a: $(obj_dir)/libreria.o
+	ar -r $(lib_dir)/liblibreria.a $(obj_dir)/libreria.o
+
+$(obj_dir)/libreria.o: $(src_dir)/libreria.c $(lib_dir)/libreria.h
+	gcc -c $(src_dir)/libreria.c -o $(obj_dir)/libreria.o
 
 $(obj_dir):
 	mkdir -p $(obj_dir)
@@ -21,20 +27,3 @@ $(obj_dir):
 clean:
 	rm -r $(obj_dir)
 
-# TEST
-
-run: clean_test set_test
-	gcc -c test/libreria.c -o test/libreria.o
-	ar -rv test/liblibreria.a test/libreria.o
-	gcc -o test/test test/test.c -iquote ./test -L ./test -llibreria
-
-.PHONY: run set_test clean_test
-
-set_test: test
-	cp lib/* src/* test
-
-test:
-	mkdir test
-
-clean_test:
-	rm -r test
