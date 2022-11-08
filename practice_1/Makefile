@@ -5,10 +5,10 @@ exe_dir = dist
 lib_dir = lib
 src_dir = src
 
-all: $(obj_dir) test_exe
+all: $(obj_dir) $(exe_dir)/test test
 
-test_exe: $(exe_dir)/test
-	ln -s $(exe_dir)/test test_exe
+test: $(exe_dir)/test
+	ln -s $(exe_dir)/test test
 
 $(exe_dir)/test: $(src_dir)/test.c $(lib_dir)/liblibreria.a 
 	gcc -o $(exe_dir)/test $(src_dir)/test.c \
