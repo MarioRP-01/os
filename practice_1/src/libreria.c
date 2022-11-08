@@ -35,8 +35,8 @@ struct Stack {
 };
 
 struct Stack new_stack(int length);
-void push(struct Stack stack, char * string, int length);
-void show_stack();
+int push(struct Stack stack, char * string, int length);
+int show_stack(struct Stack stack);
 void free_stack();
 
 
@@ -47,23 +47,27 @@ int tail(int N){
   ssize_t read_len = 0;
 
   while ((read_len = getline(&line, &len, stdin) != -1)) {
-    insertar(stack, line, len); 
+    push(stack, line, len); 
   }
 
   return 1;
 }
 
-int longlines(int N){
-  printf("longlines is running\n");
-  int result = 0;
-  return result;
-}
 
-int next(int counter, int upper_range) {
-  if (counter < upper_range) {
+int next(int counter, int length) {
+  if (counter < length - 1) {
     counter++;
   }  else {
     counter = 0;
+  }
+  return counter;
+}
+
+int previous(int counter, int length) {
+  if (counter > 0) {
+    counter--;
+  } else {
+    counter = length - 1;
   }
   return counter;
 }
@@ -85,52 +89,68 @@ struct Stack new_stack(int length) {
   return stack;
 }
 
-int insertar(struct Stack stack, char * string, int length) {
+int push(struct Stack stack, char * string, int length) {
   int init = stack.init; 
   int last = stack.last;
-  int len = stack.len;
 
   if (string == NULL) return 0;
   
   if (stack.len == 0) return 1;
-
-  if (stack.len == 1) stack.store[0] = string;
 
   if (init == last) {
     stack.store[init] = string;
     return 1;
   }
 
-  if (
-    stack.store[last] != NULL 
-    && last + 1 < len 
-    && stack.store[last + 1] == NULL
-  ) {
-    last++;
+  last = next(last, length);
+
+  if (stack.store[last] == NULL) {
     stack.store[last] = string;
 
     stack.last = last;
     return 1;
   }
 
-  /*
-  if (stack.store[last] != NULL && last + 1 == len) {
-    last = 0;
-    stack.store[last] = string;
-    
-    stack.init++;
-    stack.last = last;
-    return 1;
+  free(stack.store[init]);
+  init = next(init, length);
+
+  stack.last = last;
+  stack.init = init;
+  return 1;
+}
+
+int show_stack (struct Stack stack) {
+  int init = stack.init;
+  int last = stack.last;
+  int length = stack.len;
+
+  if (stack.store[init] == NULL) {
+    return 0;
   }
-  */
+
+  while (init != last) {
+    printf("%s\n", stack.store[init]);
+    init = next(init, length);
+  };
+
+  printf("%s\n", stack.store[init]);
 
   return 1;
 }
 
-void mostrar () {
+void free_stack(struct Stack stack) { 
+  int length = stack.len;
 
+  for (int i = 0; i < length; i++) {
+    if (stack.store[i] != NULL) {
+      free(stack.store[i]);
+    } 
+  }
+  free(stack.store);
 }
 
-void free_array() {
-
+int longlines(int N){
+  printf("longlines is running\n");
+  int result = 0;
+  return result;
 }
