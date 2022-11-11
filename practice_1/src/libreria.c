@@ -35,9 +35,9 @@ struct Stack {
 };
 
 struct Stack new_stack(int length);
-int push(struct Stack stack, char * string, int length);
+int push(struct Stack * stack, char * string, int length);
 int show_stack(struct Stack stack);
-void free_stack();
+void free_stack(struct Stack stack);
 
 
 int tail(int N){
@@ -47,12 +47,14 @@ int tail(int N){
   ssize_t read_len = 0;
 
   while ((read_len = getline(&line, &len, stdin) != -1)) {
-    push(stack, line, len); 
+    push(&stack, line, len); 
+    line = NULL;
+    len = 0;
   }
-
-  return 1;
+  show_stack(stack);
+  free_stack(stack); 
+  return 1; 
 }
-
 
 int next(int counter, int length) {
   if (counter < length - 1) {
@@ -75,11 +77,13 @@ int previous(int counter, int length) {
 struct Stack new_stack(int length) {
   
   struct Stack stack;
-  char * store[length];
+  char ** store = malloc(length * sizeof(char *));
   stack.store = store;
   
   for (int i = 0; i < length; i++) {
     stack.store[i] = NULL;
+    if (stack.store[i] == NULL) {
+    }
   }
 
   stack.len = length;
@@ -89,33 +93,33 @@ struct Stack new_stack(int length) {
   return stack;
 }
 
-int push(struct Stack stack, char * string, int length) {
-  int init = stack.init; 
-  int last = stack.last;
-
+int push(struct Stack * stack, char * string, int length) {
   if (string == NULL) return 0;
-  
-  if (stack.len == 0) return 1;
 
-  if (init == last) {
-    stack.store[init] = string;
+  if (stack->len == 0) return 1;
+
+  if (stack->store[stack->init] == NULL) {
+    stack->store[stack->init] = string;
     return 1;
   }
 
-  last = next(last, length);
-
-  if (stack.store[last] == NULL) {
-    stack.store[last] = string;
-
-    stack.last = last;
+  if (stack->init == stack->last) {
+    stack->last = next(stack->last, stack->len);
+    stack->store[stack->last] = string;
     return 1;
   }
 
-  free(stack.store[init]);
-  init = next(init, length);
+  stack->last = next(stack->last, stack->len);
 
-  stack.last = last;
-  stack.init = init;
+  if (stack->store[stack->last] == NULL) {
+    stack->store[stack->last] = string;
+    return 1;
+  }
+
+  free(stack->store[stack->init]);
+  stack->init = next(stack->init, stack->len);
+
+  stack->store[stack->last] = string;
   return 1;
 }
 
@@ -129,11 +133,11 @@ int show_stack (struct Stack stack) {
   }
 
   while (init != last) {
-    printf("%s\n", stack.store[init]);
+    printf("%s", stack.store[init]);
     init = next(init, length);
   };
 
-  printf("%s\n", stack.store[init]);
+  printf("%s", stack.store[init]);
 
   return 1;
 }

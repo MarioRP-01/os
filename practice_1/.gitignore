@@ -1,3 +1,4 @@
 ./dist
-./test_exe
-
+./test
+./debug
+./example.txt
