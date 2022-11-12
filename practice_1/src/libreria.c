@@ -34,10 +34,12 @@ struct Stack {
   int last;
 };
 
+// tail
+
 struct Stack new_stack(int length);
 int push(struct Stack * stack, char * string, int length);
 int show_stack(struct Stack stack);
-void free_stack(struct Stack stack);
+void free_stack(struct Stack * stack);
 
 
 int tail(int N){
@@ -52,7 +54,7 @@ int tail(int N){
     len = 0;
   }
   show_stack(stack);
-  free_stack(stack); 
+  free_stack(&stack); 
   return 1; 
 }
 
@@ -82,8 +84,6 @@ struct Stack new_stack(int length) {
   
   for (int i = 0; i < length; i++) {
     stack.store[i] = NULL;
-    if (stack.store[i] == NULL) {
-    }
   }
 
   stack.len = length;
@@ -142,15 +142,20 @@ int show_stack (struct Stack stack) {
   return 1;
 }
 
-void free_stack(struct Stack stack) { 
-  int length = stack.len;
-
+void free_stack(struct Stack * stack) { 
+  int length = stack->len;
   for (int i = 0; i < length; i++) {
-    if (stack.store[i] != NULL) {
-      free(stack.store[i]);
+    if (stack->store[i] != NULL) {
+      free(stack->store[i]);
     } 
   }
-  free(stack.store);
+
+  free(stack->store);
+
+  stack->len = 0;
+  stack->init = 0;
+  stack->last = 0;
+  stack->store = NULL;
 }
 
 int longlines(int N){
