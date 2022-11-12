@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /*
 DESCRIPCION:
@@ -158,8 +159,115 @@ void free_stack(struct Stack * stack) {
   stack->store = NULL;
 }
 
+// longlines
+
+struct String {
+  char * string;
+  int length;
+};
+
+struct Node {
+  struct String value;
+  struct Node * next;
+};
+
+struct OrderedList {
+  struct Node * init;
+  struct Node * last;
+  int length;
+};
+
+struct String new_string(char * string);
+struct OrderedList new_ordered_list(); 
+int ordered_list_length(struct OrderedList list);
+int ordered_list_is_empty(struct OrderedList list);
+int insert(struct OrderedList * list, struct String elem);
+int remove_last(struct OrderedList * list);
+void show_ordered_list(struct OrderedList list);
+void free_string(struct String * string);
+void free_node(struct Node * node);
+void free_ordered_list(struct OrderedList * list);
+
 int longlines(int N){
-  printf("longlines is running\n");
-  int result = 0;
-  return result;
+  struct OrderedList list = new_ordered_list();
+  char * line = NULL;
+  size_t len = 0;
+
+  while (getline(&line, &len, stdin) != -1) {
+    insert(&list, new_string(line));
+    if (ordered_list_length(list) > N) {
+      remove_last(&list);
+    }
+    line = NULL;
+    len = 0;
+  }
+
+  show_ordered_list(list);
+  free_ordered_list(&list);
+  
+  return 1;
 }
+
+struct String new_string(char * string) {
+  struct String elem;
+  elem.string = string;
+  elem.length = strlen(string);
+
+  return elem;
+}
+
+struct OrderedList new_ordered_list() {
+  struct OrderedList list;
+  list.init = NULL;
+  list.last = NULL;
+  list.length = 0;
+
+  return list;
+}
+
+int ordered_list_length(struct OrderedList list) {
+  return list.length;
+}
+
+int ordered_list_is_empty(struct OrderedList list) {
+  return (list.length == 0 || list.init == NULL || list.last == NULL);
+}
+
+int insert(struct OrderedList * list, struct String elem) {
+  if (elem.string == NULL) return 0;
+  
+  struct Node * node = malloc(sizeof(struct Node));
+  node->value = elem;
+  node->next = NULL;
+
+  if (ordered_list_is_empty(*list)) {
+    list->init = node;
+    list->last = node;
+    list->length = 1;
+    return 1;
+  }
+
+  struct Node * pPrev = list->init;
+  struct Node * pNext = pPrev->next;
+  int node_is_smaller = node->value.length < pNext->value.length;
+
+  while (pNext != NULL && node_is_smaller) {
+    pPrev = pNext;
+    pNext = pNext->next;
+    node_is_smaller = node->value.length < pNext->value.length;
+  }
+
+  if (pPrev == list->init && !node_is_smaller) {
+    node->next = pPrev;
+    list->init = node;
+    return 1;
+  }
+
+  node->next = pNext;
+  pPrev->next = node;
+  
+  if (pNext == NULL) list->last = node;
+
+  return 1;
+}
+
