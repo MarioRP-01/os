@@ -2,17 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
-DESCRIPCION:
-Lee de la stdin e imprime las N primeras líneas recibidas.
-
-PARAMETROS ENTRADA:
-N: Números de parámetros recibidos.
-VALOERES SALIDA:
-0 -> Error en la ejecución
-1 -> Exito en la ejecución
-*/
-
 int head(int N){
   char *line = NULL;
   size_t len = 0;
@@ -28,14 +17,14 @@ int head(int N){
   return 1;
 }
 
+// tail
+
 struct Stack {
   char ** store;
   int len;
   int init;
   int last;
 };
-
-// tail
 
 struct Stack new_stack(int length);
 int push(struct Stack * stack, char * string, int length);
@@ -240,41 +229,43 @@ int insert(struct OrderedList * list, struct String * elem) {
   
   struct Node * node = malloc(sizeof(struct Node));
   node->value = elem;
-  node->next = NULL;
-  node->prev = NULL;
 
   if (ordered_list_is_empty(*list)) {
     list->init = node;
     list->last = node;
+    node->next = NULL;
+    node->prev = NULL;
     list->length = 1;
     return 1;
   }
 
   list->length++;
 
-  struct Node * pPrev = list->init;
-  struct Node * pNext = pPrev->next;
-  int node_is_smaller = node->value->length < pPrev->value->length;
+  struct Node * pAux = list->init;
+  int node_is_smaller = node->value->length < pAux->value->length;
 
-  while (pNext != NULL && node_is_smaller) {
-    pPrev = pNext;
-    pNext = pNext->next;
+  while (pAux->next != NULL && node_is_smaller) {
+    pAux = pAux->next;
+    node_is_smaller = node->value->length < pAux->value->length;
   }
 
-  if (pPrev == list->init && !node_is_smaller) {
-    node->next = pPrev;
-    node->prev = NULL;
-    pPrev->prev = node;
-    list->init = node;
+  if (pAux->next == NULL && node_is_smaller) {
+    node->next = pAux->next;
+    pAux->next = node;
+    node->prev = pAux;
+    list->last = node;
     return 1;
   }
 
-  node->next = pNext;
-  node->prev = pPrev;
-  pPrev->next = node;
-  
-  if (pNext == NULL) list->last = node;
+  if (pAux == list->init) 
+    list->init = node;
+  else
+    pAux->prev->next = node;
 
+  node->next = pAux;
+  node->prev = pAux->prev;
+  pAux->prev = node;
+  
   return 1;
 }
 
@@ -293,9 +284,11 @@ int remove_last(struct OrderedList * list) {
 
 void show_ordered_list(struct OrderedList list) {
   struct Node * pAux = list.init;
+  int count = 0;
   while (pAux != NULL) {
     printf("%s", pAux->value->string);
     pAux = pAux->next;
+    count++;
   }
 }
 
