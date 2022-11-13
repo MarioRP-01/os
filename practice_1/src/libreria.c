@@ -167,8 +167,9 @@ struct String {
 };
 
 struct Node {
-  struct String value;
+  struct String * value;
   struct Node * next;
+  struct Node * prev;
 };
 
 struct OrderedList {
@@ -177,14 +178,14 @@ struct OrderedList {
   int length;
 };
 
-struct String new_string(char * string);
+struct String * new_string(char * string);
 struct OrderedList new_ordered_list(); 
 int ordered_list_length(struct OrderedList list);
 int ordered_list_is_empty(struct OrderedList list);
-int insert(struct OrderedList * list, struct String elem);
+int insert(struct OrderedList * list, struct String * elem);
 int remove_last(struct OrderedList * list);
 void show_ordered_list(struct OrderedList list);
-void free_string(struct String * string);
+void free_string(struct String * node);
 void free_node(struct Node * node);
 void free_ordered_list(struct OrderedList * list);
 
@@ -208,10 +209,11 @@ int longlines(int N){
   return 1;
 }
 
-struct String new_string(char * string) {
-  struct String elem;
-  elem.string = string;
-  elem.length = strlen(string);
+
+struct String * new_string(char * string) {
+  struct String * elem = malloc(sizeof(struct String));
+  elem->string = string;
+  elem->length = strlen(string);
 
   return elem;
 }
@@ -233,12 +235,13 @@ int ordered_list_is_empty(struct OrderedList list) {
   return (list.length == 0 || list.init == NULL || list.last == NULL);
 }
 
-int insert(struct OrderedList * list, struct String elem) {
-  if (elem.string == NULL) return 0;
+int insert(struct OrderedList * list, struct String * elem) {
+  if (elem->string == NULL) return 0;
   
   struct Node * node = malloc(sizeof(struct Node));
   node->value = elem;
   node->next = NULL;
+  node->prev = NULL;
 
   if (ordered_list_is_empty(*list)) {
     list->init = node;
@@ -247,23 +250,27 @@ int insert(struct OrderedList * list, struct String elem) {
     return 1;
   }
 
+  list->length++;
+
   struct Node * pPrev = list->init;
   struct Node * pNext = pPrev->next;
-  int node_is_smaller = node->value.length < pNext->value.length;
+  int node_is_smaller = node->value->length < pPrev->value->length;
 
   while (pNext != NULL && node_is_smaller) {
     pPrev = pNext;
     pNext = pNext->next;
-    node_is_smaller = node->value.length < pNext->value.length;
   }
 
   if (pPrev == list->init && !node_is_smaller) {
     node->next = pPrev;
+    node->prev = NULL;
+    pPrev->prev = node;
     list->init = node;
     return 1;
   }
 
   node->next = pNext;
+  node->prev = pPrev;
   pPrev->next = node;
   
   if (pNext == NULL) list->last = node;
@@ -271,3 +278,42 @@ int insert(struct OrderedList * list, struct String elem) {
   return 1;
 }
 
+int remove_last(struct OrderedList * list) {
+  if (ordered_list_is_empty(*list)) return 1;
+  
+  if (list->length == 1) list->init = NULL;
+
+  list->length--;
+  list->last = list->last->prev;
+
+  free_node(list->last->next);
+  list->last->next = NULL;
+  return 1;
+}
+
+void show_ordered_list(struct OrderedList list) {
+  struct Node * pAux = list.init;
+  while (pAux != NULL) {
+    printf("%s", pAux->value->string);
+    pAux = pAux->next;
+  }
+}
+
+void free_string(struct String * string) {
+  free(string->string);
+  free(string);
+}
+
+void free_node(struct Node * node) {
+  free_string(node->value);
+  free(node);
+}
+
+void free_ordered_list(struct OrderedList * list) {
+  struct Node * pAux = list->init;
+  while (list->init != NULL) {
+    pAux = pAux->next;
+    free_node(list->init);
+    list->init = pAux;
+  }
+}
