@@ -48,17 +48,29 @@ Array array(void *value, size_t size) {
 // -----
 // REDIRECTIONS
 // -----
+typedef enum FileDefinitionType {
+  file_descriptor = 0,
+  file_route = 1,
+  file_default = 2,
+} FileDefinitionType;
+
+typedef struct FileDefinition {
+  void *value;
+  FileDefinitionType type;
+} FileDefinition;
+
 typedef struct Redirections {
-  FILE *stdin;
-  FILE *stdout;
-  FILE *stderr;
+  FileDefinition stdin;
+  FileDefinition stdout;
+  FileDefinition stderr;
 } Redirections;
 
-Redirections redirections(FILE *stdin, FILE *stdout, FILE *stderr) {
+Redirections redirections(FileDefinition in, FileDefinition out,
+                          FileDefinition err) {
   Redirections redirections;
-  redirections.stdin = stdin;
-  redirections.stdout = stdout;
-  redirections.stderr = stderr;
+  redirections.stdin = in;
+  redirections.stdout = out;
+  redirections.stderr = err;
   return redirections;
 }
 
@@ -70,8 +82,8 @@ Redirections redirections(FILE *stdin, FILE *stdout, FILE *stderr) {
 Bool prompt(Array *buffer, char *cwd);
 
 // execute commands
-void execute_line(tline);
-void execute_command(tcommand command, Redirections redirections);
+Bool execute_line(tline *line);
+Bool execute_command(tcommand command, Redirections redirections);
 
 // extension parser
 Bool isValidLine(tline *line);
@@ -98,6 +110,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "%s\n", ERROR_INVALID_FUNCTION);
       continue;
     }
+    execute_line(line);
   }
 
   free(cwd);
@@ -115,19 +128,48 @@ Bool prompt(Array *buffer, char *cwd) {
   return getline((char **)&buffer->value, &buffer->size, stdin) != -1;
 }
 
-void execute_line(tline line) {}
+Bool execute_line(tline *line) {
+  Redirections redir;
 
-void execute_command(tcommand command, Redirections redirections) {
+  if ((redir.stdin.value = line->redirect_input) == NULL)
+    redir.stdin.type = file_default;
+  else
+    redir.stdin.type = file_route;
+
+  if ((redir.stdout.value = line->redirect_output) == NULL)
+    redir.stdout.type = file_default;
+  else
+    redir.stdout.type = file_route;
+
+  if ((redir.stderr.value = line->redirect_error) == NULL)
+    redir.stderr.type = file_default;
+  else
+    redir.stderr.type = file_route;
+
+  return execute_command(line->commands[0], redir);
+}
+
+Bool execute_command(tcommand command, Redirections redir) {
   pid_t pid = fork();
   int status;
   if (pid < 0) {
     fprintf(stderr, "%s\n", ERROR_FORK);
     exit(-2);
   } else if (pid == 0) {
+    if (redir.stdin.type == file_route) {
+      freopen(redir.stdin.value, "r", stdin);
+    }
+    if (redir.stdout.type == file_route) {
+      freopen(redir.stdout.value, "w", stdout);
+    }
+    if (redir.stderr.type == file_route) {
+      freopen(redir.stderr.value, "w", stderr);
+    }
     execv(command.filename, command.argv);
   } else {
     wait(&status);
   }
+  return true;
 }
 
 Bool isValidLine(tline *line) {
