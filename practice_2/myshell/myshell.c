@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -85,6 +86,9 @@ Bool prompt(Array *buffer, char *cwd);
 Bool execute_line(tline *line);
 Bool execute_command(tcommand command, Redirections redirections);
 
+// extension file_definition
+Bool redirect(FileDefinition redir, char *mode, FILE *file);
+
 // extension parser
 Bool isValidLine(tline *line);
 void free_tline(tline *line);
@@ -131,43 +135,57 @@ Bool prompt(Array *buffer, char *cwd) {
 Bool execute_line(tline *line) {
   Redirections redir;
 
-  if ((redir.stdin.value = line->redirect_input) == NULL)
-    redir.stdin.type = file_default;
-  else
-    redir.stdin.type = file_route;
+  for (int i = 0; i < line->ncommands; i++) {
+    if (i == 0) {
+      if ((redir.stdin.value = line->redirect_input) == NULL)
+        redir.stdin.type = file_default;
+      else
+        redir.stdin.type = file_route;
+    } else {
+      // TODO: Redirect stdin from stdout of previous command
+    }
+    if (i == line->ncommands - 1) {
+      if ((redir.stdout.value = line->redirect_output) == NULL)
+        redir.stdout.type = file_default;
+      else
+        redir.stdout.type = file_route;
 
-  if ((redir.stdout.value = line->redirect_output) == NULL)
-    redir.stdout.type = file_default;
-  else
-    redir.stdout.type = file_route;
-
-  if ((redir.stderr.value = line->redirect_error) == NULL)
-    redir.stderr.type = file_default;
-  else
-    redir.stderr.type = file_route;
-
-  return execute_command(line->commands[0], redir);
+      if ((redir.stderr.value = line->redirect_error) == NULL)
+        redir.stderr.type = file_default;
+      else
+        redir.stderr.type = file_route;
+    } else {
+      // TODO: Redirect stdout to next command
+    }
+    return execute_command(line->commands[i], redir);
+  }
+  return true;
 }
 
 Bool execute_command(tcommand command, Redirections redir) {
+  int fd[2];
   pid_t pid = fork();
+
   int status;
   if (pid < 0) {
     fprintf(stderr, "%s\n", ERROR_FORK);
     exit(-2);
   } else if (pid == 0) {
-    if (redir.stdin.type == file_route) {
-      freopen(redir.stdin.value, "r", stdin);
-    }
-    if (redir.stdout.type == file_route) {
-      freopen(redir.stdout.value, "w", stdout);
-    }
-    if (redir.stderr.type == file_route) {
-      freopen(redir.stderr.value, "w", stderr);
-    }
+    redirect(redir.stdin, "r", stdin);
+    redirect(redir.stdout, "w", stdout);
+    redirect(redir.stderr, "w", stderr);
     execv(command.filename, command.argv);
+    printf("continua");
   } else {
     wait(&status);
+  }
+  return true;
+}
+
+Bool redirect(FileDefinition redir, char *mode, FILE *file) {
+  if (redir.type == file_route) {
+    if (freopen(redir.value, mode, file) == NULL)
+      fprintf(stderr, "%s. %s\n", ERROR_FILE, strerror(errno));
   }
   return true;
 }
