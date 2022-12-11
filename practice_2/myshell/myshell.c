@@ -107,7 +107,6 @@ Bool execute_line(tline *line) {
 
     if ((pid = fork()) < 0) {
       fprintf(stderr, "%s\n", ERROR_FORK);
-      exit(-2);
     } 
     else if (pid == 0) {
       close(fd[0]);
@@ -130,10 +129,10 @@ Bool execute_line(tline *line) {
       }
 
       close(fd[1]);
-      execv(line->commands[0].filename, line->commands[0].argv);
+      execv(line->commands[i].filename, line->commands[i].argv);
     } else {
-      in = fd[0];
       close(fd[1]);
+      in = fd[0];
 
       if (i == line->ncommands - 1) {
         close(fd[0]);
