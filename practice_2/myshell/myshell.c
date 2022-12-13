@@ -19,6 +19,11 @@
 #define ERROR_FILE "fichero: Error. Descripción del error"
 #define ERROR_FORK "fork: Error. No se pudo crear el hijo"
 
+#define MYSHELL_CD "cd"
+#define MYSHELL_JOBS "jobs"
+#define MYSHELL_UMASK "umask"
+const char * MYSHELL_COMMANDS[] = {MYSHELL_CD, MYSHELL_JOBS, MYSHELL_UMASK};
+
 // -----
 // BOOL
 // -----
@@ -56,8 +61,12 @@ Bool prompt(Array *buffer, char *cwd);
 // execute commands
 Bool execute_line(tline *line);
 
+// myshell function
+Bool isMyShellCommand(char *command_name);
+
 // extension parser
 Bool isValidLine(tline *line);
+Bool isValidCommand(tcommand command);
 void free_tline(tline *line);
 void free_tcommand(tcommand *command);
 
@@ -65,6 +74,8 @@ void free_tcommand(tcommand *command);
 // MAIN
 // -----
 int main() {
+  
+
   char *cwd = getcwd(NULL, (size_t)0);
 
   tline *line;
@@ -144,15 +155,37 @@ Bool execute_line(tline *line) {
   return true;
 }
 
+Bool isMyShellCommand(char *command_name) {
+  int i = 0;
+  Bool isValid;
+  while (
+    !(isValid = strcmp(command_name, MYSHELL_COMMANDS[i]) == 0) 
+    && i < sizeof(MYSHELL_COMMANDS)
+    ) {
+      
+    ++i;
+  }
+  return isValid;
+}
+
+// extension parser
+
 Bool isValidLine(tline *line) {
   Bool success = line != NULL;
 
   int i = 0;
   while (success && i < line->ncommands) {
-    success = line->commands[i].filename != NULL;
+    success = isValidCommand(line->commands[i]);
     ++i;
   }
   return success;
+}
+
+Bool isValidCommand(tcommand command) {
+  if (command.filename != NULL) {
+    return true;
+  }
+  return isMyShellCommand(command.argv[0]);
 }
 
 void free_tcommand(tcommand *command) {
