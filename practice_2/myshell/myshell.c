@@ -14,15 +14,27 @@
 #define PROMPT_SHELL "msh"
 
 // errors
-#define ERROR_BAD_ARGUMENTS "argumento: No se admiten argumentos"
-#define ERROR_INVALID_FUNCTION "mandato: No se encuentra el mandato"
-#define ERROR_FILE "fichero: Error. Descripción del error"
-#define ERROR_FORK "fork: Error. No se pudo crear el hijo"
+#define ERROR_BAD_ARGUMENTS "argumento: No se admiten argumentos."
+#define ERROR_INVALID_FUNCTION "mandato: No se encuentra el mandato."
+#define ERROR_FILE "fichero: Error. Descripción del error."
+#define ERROR_FORK "fork: Error. No se pudo crear el hijo."
 
 #define MYSHELL_CD "cd"
+#define ERROR_MANY_ARGUMENTS_CD "cd: Demasiados argumentos."
+#define ERROR_EXECUTION_CD "cd: Error. No se ha podido ejecutar correctamente. %d"
+
 #define MYSHELL_JOBS "jobs"
 #define MYSHELL_UMASK "umask"
-const char * MYSHELL_COMMANDS[] = {MYSHELL_CD, MYSHELL_JOBS, MYSHELL_UMASK};
+#define MYSHELL_FG "fg"
+#define MYSHELL_EXIT "exit"
+
+const char * MYSHELL_COMMANDS[] = {
+  MYSHELL_CD, 
+  MYSHELL_JOBS, 
+  MYSHELL_UMASK, 
+  MYSHELL_FG, 
+  MYSHELL_EXIT
+};
 
 // -----
 // BOOL
@@ -56,13 +68,20 @@ Array array(void *value, size_t size) {
 // -----
 
 // promt
-Bool prompt(Array *buffer, char *cwd);
+Bool prompt(Array *buffer);
 
 // execute commands
 Bool execute_line(tline *line);
+Bool execute_line_bg(tline * line);
 
 // myshell function
 Bool isMyShellCommand(char *command_name);
+Bool executeMyShellCommand(Array argv);
+Bool myShell_cd(Array argv);
+Bool myShell_jobs(Array argv);
+Bool myShell_fg(Array argv);
+Bool myShell_umask(Array argv);
+Bool myShell_exit(Array argv);
 
 // extension parser
 Bool isValidLine(tline *line);
@@ -74,13 +93,11 @@ void free_tcommand(tcommand *command);
 // MAIN
 // -----
 int main() {
-  
 
-  char *cwd = getcwd(NULL, (size_t)0);
 
   tline *line;
   Array buffer = array(NULL, 1024);
-  while (prompt(&buffer, cwd)) {
+  while (prompt(&buffer)) {
     line = tokenize(buffer.value);
     if (!isValidLine(line)) {
       fprintf(stderr, "%s\n", ERROR_INVALID_FUNCTION);
@@ -89,7 +106,6 @@ int main() {
     execute_line(line);
   }
 
-  free(cwd);
   free(buffer.value);
   free_tline(line);
 
@@ -101,10 +117,15 @@ int main() {
 // FUNCTION IMPLEMENTATION
 // -----
 
-Bool prompt(Array *buffer, char *cwd) {
-  printf("%s %s > ", PROMPT_SHELL, cwd);
-  return getline((char **)&buffer->value, &buffer->size, stdin) != -1;
+Bool prompt(Array *buffer) {
+  char *cwd = getcwd(NULL, (size_t)0);
+  printf("%s %s > ", PROMPT_SHELL, cwd);  
+  Bool isSuccess = getline((char **)&buffer->value, &buffer->size, stdin) != -1;
+  free(cwd);
+  return isSuccess;
 }
+
+// Execute commands
 
 Bool execute_line(tline *line) {
 
@@ -121,6 +142,11 @@ Bool execute_line(tline *line) {
     } 
     else if (pid == 0) {
       close(fd[0]);
+
+      if (isMyShellCommand(line->commands[i].argv[0])) {
+        close(fd[1]);
+        exit(0);
+      }
 
       if (i == 0 && line->redirect_input != NULL) {
         freopen(line->redirect_input, "r", stdin);
@@ -141,9 +167,17 @@ Bool execute_line(tline *line) {
 
       close(fd[1]);
       execv(line->commands[i].filename, line->commands[i].argv);
+
     } else {
       close(fd[1]);
-      in = fd[0];
+
+      if (isMyShellCommand(line->commands[i].argv[0])) {
+        Array argv = array(line->commands[i].argv, line->commands[i].argc);
+        executeMyShellCommand(argv);
+        in = 0;
+      } else {
+        in = fd[0];
+      }
 
       if (i == line->ncommands - 1) {
         close(fd[0]);
@@ -155,17 +189,87 @@ Bool execute_line(tline *line) {
   return true;
 }
 
+// myshell function
+
 Bool isMyShellCommand(char *command_name) {
+  int myshell_commands_size = sizeof(MYSHELL_COMMANDS) / sizeof(char *);
+
   int i = 0;
   Bool isValid;
   while (
-    !(isValid = strcmp(command_name, MYSHELL_COMMANDS[i]) == 0) 
-    && i < sizeof(MYSHELL_COMMANDS)
+    i < myshell_commands_size
+    && !(isValid = strcmp(command_name, MYSHELL_COMMANDS[i]) == 0)
     ) {
-      
+
     ++i;
   }
   return isValid;
+}
+
+Bool executeMyShellCommand(Array argv) {
+  if (argv.size == 0) {
+    return false;
+  }
+
+  if (strcmp(((char **)argv.value)[0], MYSHELL_CD) == 0) {
+    return myShell_cd(argv);
+  }
+
+  if (strcmp(((char **)argv.value)[0], MYSHELL_JOBS) == 0) {
+    return myShell_jobs(argv);
+  }
+
+  if (strcmp(((char **)argv.value)[0], MYSHELL_FG) == 0) {
+    return myShell_fg(argv);
+  }
+
+  if (strcmp(((char **)argv.value)[0], MYSHELL_UMASK) == 0) {
+    return myShell_umask(argv);
+  }
+
+  if (strcmp(((char **)argv.value)[0], MYSHELL_EXIT) == 0) {
+    return myShell_exit(argv);
+  }
+
+  return false;
+}
+
+Bool myShell_cd(Array argv) {
+
+  if (argv.size > 2) {
+    fprintf(stderr, "cd: Demasiados argumentos");
+    return false;
+  }
+
+  char * path;
+
+  if (argv.size == 2) {
+    path = ((char**)argv.value)[1];
+  }
+  else {
+    path = getenv("HOME");
+  }
+  Bool isSuccess = chdir(path) == 0;
+  
+  if (!isSuccess) fprintf(stderr, ERROR_EXECUTION_CD, errno);
+  
+return isSuccess;
+}
+
+Bool myShell_jobs(Array argv) {
+  return true;
+}
+
+Bool myShell_fg(Array argv) {
+  return true;
+}
+
+Bool myShell_umask(Array argv) {
+  return true;
+}
+
+Bool myShell_exit(Array argv) {
+  return true;
 }
 
 // extension parser
