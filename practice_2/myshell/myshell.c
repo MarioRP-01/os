@@ -9,6 +9,25 @@
 #include "parser.h"
 
 // -----
+// ARRAY
+// -----
+typedef struct Array {
+  void *value;
+  size_t size;
+} Array;
+
+Array array(void *value, size_t size) {
+  Array array;
+  if (value != NULL) {
+    array.value = value;
+  } else {
+    array.value = malloc(sizeof(char *) * size);
+  }
+  array.size = size;
+  return array;
+}
+
+// -----
 // CONSTANTS
 // -----
 #define PROMPT_SHELL "msh"
@@ -36,6 +55,8 @@ const char * MYSHELL_COMMANDS[] = {
   MYSHELL_EXIT
 };
 
+Array created_process;
+
 // -----
 // BOOL
 // -----
@@ -48,20 +69,11 @@ Bool bool(int boolean) {
   return false;
 }
 
-// -----
-// ARRAY
-// -----
-typedef struct Array {
-  void *value;
-  size_t size;
-} Array;
-
-Array array(void *value, size_t size) {
-  Array array;
-  array.value = value;
-  array.size = size;
-  return array;
-}
+typedef struct CommandRedirect {
+  char *input;
+  char *output;
+  char *error;
+} CommandRedirect;
 
 // -----
 // FUNCTION DECLARATION
@@ -72,7 +84,11 @@ Bool prompt(Array *buffer);
 
 // execute commands
 Bool execute_line(tline *line);
-Bool execute_line_bg(tline * line);
+Bool execute_command(
+  tcommand *commands,
+  int ncommands,
+  CommandRedirect redirect
+  );
 
 // myshell function
 Bool isMyShellCommand(char *command_name);
@@ -89,11 +105,15 @@ Bool isValidCommand(tcommand command);
 void free_tline(tline *line);
 void free_tcommand(tcommand *command);
 
+
+
 // -----
 // MAIN
 // -----
 int main() {
-
+  // const char *i[1024] = {NULL};
+  created_process = array(NULL, 1024);
+  ((char **)created_process.value)[0] = NULL;
 
   tline *line;
   Array buffer = array(NULL, 1024);
@@ -106,6 +126,7 @@ int main() {
     execute_line(line);
   }
 
+  free(created_process.value);
   free(buffer.value);
   free_tline(line);
 
@@ -129,12 +150,27 @@ Bool prompt(Array *buffer) {
 
 Bool execute_line(tline *line) {
 
+  CommandRedirect redirect = {
+    line->redirect_input,
+    line->redirect_output,
+    line->redirect_error
+  };
+
+  execute_command(line->commands, line->ncommands, redirect);
+  return true;
+}
+
+Bool execute_command(
+  tcommand *commands,
+  int ncommands,
+  CommandRedirect redirect
+) {
   int in = 0;
 
   int fd[2];
   pid_t pid;
 
-  for (int i = 0; i < line->ncommands; i++) {
+  for (int i = 0; i < ncommands; i++) {
     pipe(fd);
 
     if ((pid = fork()) < 0) {
@@ -143,43 +179,43 @@ Bool execute_line(tline *line) {
     else if (pid == 0) {
       close(fd[0]);
 
-      if (isMyShellCommand(line->commands[i].argv[0])) {
+      if (isMyShellCommand(commands[i].argv[0])) {
         close(fd[1]);
         exit(0);
       }
 
-      if (i == 0 && line->redirect_input != NULL) {
-        freopen(line->redirect_input, "r", stdin);
+      if (i == 0 && redirect.input != NULL) {
+        freopen(redirect.input, "r", stdin);
       } else {
         dup2(in, 0);
       }
 
-      if (i < line->ncommands - 1) {
+      if (i < ncommands - 1) {
         dup2(fd[1], 1);
       }
       else {
-        if (line->redirect_output != NULL)
-          freopen(line->redirect_output, "w", stdout);
+        if (redirect.output != NULL)
+          freopen(redirect.output, "w", stdout);
 
-        if (line->redirect_error != NULL)
-          freopen(line->redirect_error, "w", stderr);
+        if (redirect.error != NULL)
+          freopen(redirect.error, "w", stderr);
       }
 
       close(fd[1]);
-      execv(line->commands[i].filename, line->commands[i].argv);
+      execv(commands[i].filename, commands[i].argv);
 
     } else {
       close(fd[1]);
 
-      if (isMyShellCommand(line->commands[i].argv[0])) {
-        Array argv = array(line->commands[i].argv, line->commands[i].argc);
+      if (isMyShellCommand(commands[i].argv[0])) {
+        Array argv = array(commands[i].argv, commands[i].argc);
         executeMyShellCommand(argv);
         in = 0;
       } else {
         in = fd[0];
       }
 
-      if (i == line->ncommands - 1) {
+      if (i == ncommands - 1) {
         close(fd[0]);
       }
     }
