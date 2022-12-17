@@ -1,8 +1,11 @@
+#include <signal.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -37,6 +40,7 @@ Array array(void *value, size_t size) {
 #define ERROR_INVALID_FUNCTION "mandato: No se encuentra el mandato."
 #define ERROR_FILE "fichero: Error. Descripción del error."
 #define ERROR_FORK "fork: Error. No se pudo crear el hijo."
+#define ERROR_BACKGROUND "bg: Error. Existen demasiados procesos en segundo plano."
 
 #define MYSHELL_CD "cd"
 #define ERROR_MANY_ARGUMENTS_CD "cd: Demasiados argumentos."
@@ -55,7 +59,7 @@ const char * MYSHELL_COMMANDS[] = {
   MYSHELL_EXIT
 };
 
-Array created_process;
+Array background_process;
 
 // -----
 // BOOL
@@ -78,6 +82,9 @@ typedef struct CommandRedirect {
 // -----
 // FUNCTION DECLARATION
 // -----
+
+// initialize
+Bool initialize_myshell();
 
 // promt
 Bool prompt(Array *buffer);
@@ -105,15 +112,15 @@ Bool isValidCommand(tcommand command);
 void free_tline(tline *line);
 void free_tcommand(tcommand *command);
 
+// handler
 
+static void handler_child_end(int sig, siginfo_t *si, void *ucontext);
 
 // -----
 // MAIN
 // -----
 int main() {
-  // const char *i[1024] = {NULL};
-  created_process = array(NULL, 1024);
-  ((char **)created_process.value)[0] = NULL;
+  initialize_myshell();
 
   tline *line;
   Array buffer = array(NULL, 1024);
@@ -126,7 +133,9 @@ int main() {
     execute_line(line);
   }
 
-  free(created_process.value);
+  printf("Estamos saliendo :)");
+
+  free(background_process.value);
   free(buffer.value);
   free_tline(line);
 
@@ -138,9 +147,26 @@ int main() {
 // FUNCTION IMPLEMENTATION
 // -----
 
+// initialize
+Bool initialize_myshell() {
+  background_process = array(NULL, 1024);
+  ((int *)background_process.value)[0] = 0;
+
+  struct sigaction sa;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_sigaction = handler_child_end;
+  sa.sa_flags = SA_SIGINFO | SA_RESTART;
+
+  sigaction(SIGCHLD, &sa, NULL);
+
+  return true;
+}
+
+// prompt
+
 Bool prompt(Array *buffer) {
   char *cwd = getcwd(NULL, (size_t)0);
-  printf("%s %s > ", PROMPT_SHELL, cwd);  
+  printf("%s %s > ", PROMPT_SHELL, cwd);
   Bool isSuccess = getline((char **)&buffer->value, &buffer->size, stdin) != -1;
   free(cwd);
   return isSuccess;
@@ -156,7 +182,44 @@ Bool execute_line(tline *line) {
     line->redirect_error
   };
 
-  execute_command(line->commands, line->ncommands, redirect);
+  if (!line->background) return execute_command(
+    line->commands, 
+    line->ncommands, 
+    redirect
+  );
+
+  size_t i = 0;
+  Bool has_space;
+  while ((has_space = i < background_process.size)  &&
+    ((int *)background_process.value)[i] != 0) {
+
+    ++i;
+  }
+  if (!has_space) {
+    fprintf(stderr, "%s\n", ERROR_BACKGROUND);
+    return false;
+  }
+
+  pid_t pid;
+  if ((pid = fork()) < 0) {
+    fprintf(stderr, "%s\n", ERROR_FORK);
+  }
+  else if (pid == 0) {
+    int fd = open("/dev/null", O_RDWR);
+    dup2(fd, 0);
+
+    execute_command(
+      line->commands,
+      line->ncommands,
+      redirect
+    );
+    _exit(0);
+  }
+
+  ((pid_t *)background_process.value)[i] = pid;
+
+  if (++i < background_process.size)
+    ((int *)background_process.value)[i] = 0;
   return true;
 }
 
@@ -221,7 +284,6 @@ Bool execute_command(
     }
     wait(NULL);
   }
-
   return true;
 }
 
@@ -350,4 +412,37 @@ void free_tline(tline *line) {
   free(line->redirect_input);
   free(line->redirect_output);
   free(line->redirect_error);
+}
+
+static void handler_child_end(int sig, siginfo_t *si, void *ucontext) {
+
+  size_t process_position = 0;
+  Bool is_bg = false;
+  while (process_position < background_process.size && 
+    ((int *)background_process.value)[process_position] != 0 &&
+    !(is_bg = ((int *)background_process.value)[process_position] == si->si_pid)
+  ) {
+    ++process_position;
+  }
+
+  if (!is_bg) {
+    return;
+  }
+
+  waitpid(si->si_pid, NULL, 0);
+
+  size_t last_insert = process_position;
+  while (last_insert + 1< background_process.size && 
+    ((int *)background_process.value)[last_insert + 1] != 0) {
+      
+    ++last_insert;
+  }
+
+  if (last_insert < background_process.size) {
+    ((int *)background_process.value)[process_position] = 
+      ((int *)background_process.value)[last_insert];
+
+    ((int *)background_process.value)[last_insert] = 0;
+  }
+  // printf("\nEl proceso hijo ha terminado\n");
 }
