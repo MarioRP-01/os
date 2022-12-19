@@ -12,25 +12,6 @@
 #include "parser.h"
 
 // -----
-// ARRAY
-// -----
-typedef struct Array {
-  void *value;
-  size_t size;
-} Array;
-
-Array array(void *value, size_t size) {
-  Array array;
-  if (value != NULL) {
-    array.value = value;
-  } else {
-    array.value = malloc(sizeof(char *) * size);
-  }
-  array.size = size;
-  return array;
-}
-
-// -----
 // CONSTANTS
 // -----
 #define PROMPT_SHELL "msh"
@@ -38,6 +19,7 @@ Array array(void *value, size_t size) {
 // errors
 #define ERROR_BAD_ARGUMENTS "argumento: No se admiten argumentos."
 #define ERROR_INVALID_FUNCTION "mandato: No se encuentra el mandato."
+#define ERROR_MEMORY "memoria: Error. No se pudo alojar en memoria. %d"
 #define ERROR_FILE "fichero: Error. Descripción del error."
 #define ERROR_FORK "fork: Error. No se pudo crear el hijo."
 #define ERROR_BACKGROUND "bg: Error. Existen demasiados procesos en segundo plano."
@@ -48,7 +30,12 @@ Array array(void *value, size_t size) {
 
 #define MYSHELL_JOBS "jobs"
 #define MYSHELL_UMASK "umask"
+
 #define MYSHELL_FG "fg"
+#define ERROR_WRONG_ARGUMENTS_FG "fg: Error. Numero de argumentos incorrectos. Debe mandarse solo uno."
+#define ERROR_WRONG_TYPE_ARGUMENTS_FG "fg: Error. El argumento debe ser numerico y entero. %d"
+#define ERROR_WRONG_INDEX_FG "fg: Error. El indice dado no existe."
+
 #define MYSHELL_EXIT "exit"
 
 const char * MYSHELL_COMMANDS[] = {
@@ -59,7 +46,9 @@ const char * MYSHELL_COMMANDS[] = {
   MYSHELL_EXIT
 };
 
-Array background_process;
+#define PROCESS_STATE_RUNNING "Running"
+#define PROCESS_STATE_STOPPED "Stopped"
+#define PROCESS_STATE_DONE "Done"
 
 // -----
 // BOOL
@@ -80,6 +69,84 @@ typedef struct CommandRedirect {
 } CommandRedirect;
 
 // -----
+// PROCESS DATA
+// -----
+typedef struct ProcessData {
+  pid_t pid;
+  size_t index;
+  char *state;
+  char *command_line;
+} ProcessData;
+
+Bool is_lower_process_by_index(ProcessData p1, ProcessData p2);
+ProcessData process_data(pid_t pid, char *command_line);
+void show_process_creation(ProcessData process);
+void show_process_data(ProcessData process);
+
+// -----
+// PROCESSES LIST
+// -----
+
+typedef struct OrderedList ProcessesList;
+
+Bool insert_process_data(ProcessesList *list, ProcessData elem);
+Bool remove_process_data_by_index(ProcessesList *list, size_t index);
+Bool remove_process_data_by_pid(ProcessesList *list, pid_t pid);
+ProcessData *get_process_by_index(ProcessesList list, size_t index);
+ProcessData *get_process_by_pid(ProcessesList list, pid_t pid);
+void show_processes_list(ProcessesList list);
+
+// -----
+// ORDERED LIST
+// -----
+
+typedef struct Node {
+  struct ProcessData value;
+  struct Node *next;
+  struct Node *prev;
+} Node;
+
+typedef struct OrderedList {
+  struct Node *init;
+  struct Node *last;
+  int length;
+} OrderedList;
+
+struct OrderedList new_ordered_list(); 
+int ordered_list_length(struct OrderedList list);
+int ordered_list_is_empty(struct OrderedList list);
+int insert(OrderedList *list, struct ProcessData elem);
+int remove_last(struct OrderedList *list);
+void show_ordered_list(struct OrderedList list);
+void free_ordered_list(struct OrderedList *list);
+void free_node(Node node);
+
+// -----
+// CONSTANTE
+// -----
+
+ProcessesList background_process = {NULL, NULL, 0};
+
+// -----
+// ARRAY
+// -----
+typedef struct Array {
+  void *value;
+  size_t size;
+} Array;
+
+Array array(void *value, size_t size) {
+  Array array;
+  if (value != NULL) {
+    array.value = value;
+  } else {
+    array.value = malloc(sizeof(char *) * size);
+  }
+  array.size = size;
+  return array;
+}
+
+// -----
 // FUNCTION DECLARATION
 // -----
 
@@ -90,7 +157,7 @@ Bool initialize_myshell();
 Bool prompt(Array *buffer);
 
 // execute commands
-Bool execute_line(tline *line);
+Bool execute_line(tline *line, char *raw_line);
 Bool execute_command(
   tcommand *commands,
   int ncommands,
@@ -130,12 +197,10 @@ int main() {
       fprintf(stderr, "%s\n", ERROR_INVALID_FUNCTION);
       continue;
     }
-    execute_line(line);
+    execute_line(line, strdup(buffer.value));
   }
 
-  printf("Estamos saliendo :)");
-
-  free(background_process.value);
+  free_ordered_list(&background_process);
   free(buffer.value);
   free_tline(line);
 
@@ -149,9 +214,6 @@ int main() {
 
 // initialize
 Bool initialize_myshell() {
-  background_process = array(NULL, 1024);
-  ((int *)background_process.value)[0] = 0;
-
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
   sa.sa_sigaction = handler_child_end;
@@ -174,7 +236,7 @@ Bool prompt(Array *buffer) {
 
 // Execute commands
 
-Bool execute_line(tline *line) {
+Bool execute_line(tline *line, char *raw_line) {
 
   CommandRedirect redirect = {
     line->redirect_input,
@@ -187,18 +249,6 @@ Bool execute_line(tline *line) {
     line->ncommands, 
     redirect
   );
-
-  size_t i = 0;
-  Bool has_space;
-  while ((has_space = i < background_process.size)  &&
-    ((int *)background_process.value)[i] != 0) {
-
-    ++i;
-  }
-  if (!has_space) {
-    fprintf(stderr, "%s\n", ERROR_BACKGROUND);
-    return false;
-  }
 
   pid_t pid;
   if ((pid = fork()) < 0) {
@@ -216,11 +266,10 @@ Bool execute_line(tline *line) {
     _exit(0);
   }
 
-  ((pid_t *)background_process.value)[i] = pid;
-
-  if (++i < background_process.size)
-    ((int *)background_process.value)[i] = 0;
-  return true;
+  return insert_process_data(
+    &background_process, 
+    process_data(pid, raw_line)
+  );
 }
 
 Bool execute_command(
@@ -355,6 +404,7 @@ return isSuccess;
 }
 
 Bool myShell_jobs(Array argv) {
+  show_processes_list(background_process);
   return true;
 }
 
@@ -416,33 +466,264 @@ void free_tline(tline *line) {
 
 static void handler_child_end(int sig, siginfo_t *si, void *ucontext) {
 
-  size_t process_position = 0;
-  Bool is_bg = false;
-  while (process_position < background_process.size && 
-    ((int *)background_process.value)[process_position] != 0 &&
-    !(is_bg = ((int *)background_process.value)[process_position] == si->si_pid)
-  ) {
-    ++process_position;
-  }
+  ProcessData *process = get_process_by_pid(background_process, si->si_pid);
 
-  if (!is_bg) {
-    return;
-  }
+  if (process == NULL) return;
 
   waitpid(si->si_pid, NULL, 0);
 
-  size_t last_insert = process_position;
-  while (last_insert + 1< background_process.size && 
-    ((int *)background_process.value)[last_insert + 1] != 0) {
-      
-    ++last_insert;
+  remove_process_data_by_pid(&background_process, si->si_pid);
+}
+
+// Processes
+
+// Processes Data
+
+ProcessData process_data(pid_t pid,  char *command_line) {
+  ProcessData process = {
+    pid,
+    0,
+    PROCESS_STATE_RUNNING,
+    command_line
+  };
+  return process;
+}
+
+void show_process_creation(ProcessData process) {
+  printf("[%d] %d",
+    (int) process.index,
+    process.pid
+  );
+}
+
+void show_process_data(ProcessData process) {
+  printf("[%d]\t[%s]\t\t%s",
+    (int) process.index,
+    process.state,
+    process.command_line
+  );
+}
+
+Bool is_lower_process_by_index(ProcessData p1, ProcessData p2) {
+  return p1.index < p2.index;
+}
+
+// Processes List
+
+Bool insert_process_data(ProcessesList *list, ProcessData elem) {
+
+  struct Node * node = malloc(sizeof(Node));
+  node->value = elem;
+
+  if (ordered_list_is_empty(*list)) {
+    node->value.index = 1;
+    list->init = node;
+    list->last = node;
+    list->length = 1;
+    node->next = NULL;
+    node->prev = NULL;
+    return true;
   }
 
-  if (last_insert < background_process.size) {
-    ((int *)background_process.value)[process_position] = 
-      ((int *)background_process.value)[last_insert];
+  list->length++; 
+  node->value.index = list->last->value.index + 1;
 
-    ((int *)background_process.value)[last_insert] = 0;
+  node->next = list->last->next;
+  node->prev = list->last;
+  list->last->next = node;
+  list->last = node;
+
+  return true;
+}
+
+Bool remove_process_data_by_index(ProcessesList *list, size_t index) {
+  if (ordered_list_is_empty(*list)) return false;
+
+  Node *pAux = list->init;
+  Bool isFound;
+  while (!(isFound = pAux->value.index == index) &&
+    pAux->next != NULL
+  ) {
+    pAux = pAux->next;
   }
-  // printf("\nEl proceso hijo ha terminado\n");
+
+  if (!isFound) return false;
+
+  if (pAux == list->last)
+    list->last = pAux->prev;
+
+  if (pAux == list->init)
+    list->init = list->init->next;
+  
+  if (pAux->prev != NULL)
+    pAux->prev->next = pAux->next;
+  
+  if (pAux->next != NULL)
+    pAux->next->prev = pAux->prev;
+
+  free(pAux);
+  --list->length;
+
+  return true;
+}
+
+Bool remove_process_data_by_pid(ProcessesList *list, pid_t pid) {
+  if (ordered_list_is_empty(*list)) return false;
+
+  Node *pAux = list->init;
+  Bool isFound;
+  while (!(isFound = pAux->value.pid == pid) &&
+    pAux->next != NULL
+  ) {
+    pAux = pAux->next;
+  }
+
+  if (!isFound) return false;
+
+  if (pAux == list->last)
+    list->last = pAux->prev;
+
+  if (pAux == list->init)
+    list->init = list->init->next;
+  
+  if (pAux->prev != NULL)
+    pAux->prev->next = pAux->next;
+  
+  if (pAux->next != NULL)
+    pAux->next->prev = pAux->prev;
+
+  free(pAux);
+  --list->length;
+  
+  return true;
+}
+
+ProcessData *get_process_by_index(ProcessesList list, size_t index) {
+  if (ordered_list_is_empty(list)) return NULL;
+
+  Node *pAux = list.init;
+  Bool isFound;
+  while (!(isFound = pAux->value.index == index) &&
+    pAux->next != NULL
+  ) {
+    pAux = pAux->next;
+  }
+
+  if (!isFound) return NULL;
+  return &pAux->value;
+}
+
+ProcessData *get_process_by_pid(ProcessesList list, pid_t pid) {
+  if (ordered_list_is_empty(list)) return NULL;
+
+  Node *pAux = list.init;
+  Bool isFound;
+  while (!(isFound = pAux->value.pid == pid) &&
+    pAux->next != NULL
+  ) {
+    pAux = pAux->next;
+  }
+  if (!isFound) return NULL;
+  return &pAux->value;
+}
+
+void show_processes_list(struct OrderedList list) {
+  struct Node * pAux = list.init;
+  int count = 0;
+  while (pAux != NULL) {
+    show_process_data(pAux->value);
+    pAux = pAux->next;
+    count++;
+  }
+}
+
+// Ordered List
+
+struct OrderedList ordered_list() {
+  OrderedList list = {NULL, NULL, 0};
+  return list;
+}
+
+int ordered_list_is_empty(OrderedList list) {
+  return (list.length == 0 || list.init == NULL || list.last == NULL);
+}
+
+int insert(OrderedList *list, ProcessData elem) {
+  if (elem.command_line == NULL) return 0;
+  
+  struct Node * node = malloc(sizeof(Node));
+  node->value = elem;
+
+  if (ordered_list_is_empty(*list)) {
+    list->init = node;
+    list->last = node;
+    list->length = 1;
+    node->next = NULL;
+    node->prev = NULL;
+    return 1;
+  }
+
+  list->length++;
+
+  struct Node * pAux = list->init;
+  Bool node_is_smaller;
+  while (pAux->next != NULL &&
+    (node_is_smaller = is_lower_process_by_index(node->value, pAux->value))
+    ) {
+    pAux = pAux->next;
+  }
+
+  if (pAux->next == NULL && node_is_smaller) {
+    node->next = pAux->next;
+    pAux->next = node;
+    node->prev = pAux;
+    list->last = node;
+    return 1;
+  }
+
+  if (pAux == list->init) 
+    list->init = node;
+  else
+    pAux->prev->next = node;
+
+  node->next = pAux;
+  node->prev = pAux->prev;
+  pAux->prev = node;
+  
+  return 1;
+}
+
+ProcessData *getLastElement(OrderedList list) {
+  if (ordered_list_is_empty(list)) return NULL;
+
+  return &list.last->value;
+}
+
+int remove_last(OrderedList * list) {
+  if (ordered_list_is_empty(*list)) return 1;
+  
+  if (list->length == 1) list->init = NULL;
+
+  list->length--;
+  list->last = list->last->prev;
+
+  free(list->last->next);
+  list->last->next = NULL;
+  return 1;
+}
+
+void free_ordered_list(OrderedList *list) {
+  Node * pAux = list->init;
+  while (list->init != NULL) {
+    pAux = pAux->next;
+    free(list->init);
+    free_node(*list->init);
+    list->init = pAux;
+  }
+  list->init = NULL;
+  list->last = NULL;
+}
+
+void free_node(Node node) {
+  free(node.value.command_line);
 }
