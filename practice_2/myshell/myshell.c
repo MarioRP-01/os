@@ -161,6 +161,7 @@ Bool execute_line(tline *line, char *raw_line);
 Bool execute_command(
   tcommand *commands,
   int ncommands,
+  Bool is_background,
   CommandRedirect redirect
   );
 
@@ -171,7 +172,7 @@ Bool myShell_cd(Array argv);
 Bool myShell_jobs(Array argv);
 Bool myShell_fg(Array argv);
 Bool myShell_umask(Array argv);
-Bool myShell_exit(Array argv);
+Bool myShell_exit();
 
 // extension parser
 Bool isValidLine(tline *line);
@@ -183,14 +184,17 @@ void free_tcommand(tcommand *command);
 
 static void handler_child_end(int sig, siginfo_t *si, void *ucontext);
 
+tline *line;
+Array buffer;
+
 // -----
 // MAIN
 // -----
 int main() {
   initialize_myshell();
 
-  tline *line;
-  Array buffer = array(NULL, 1024);
+  
+  buffer = array(NULL, 1024);
   while (prompt(&buffer)) {
     line = tokenize(buffer.value);
     if (!isValidLine(line)) {
@@ -200,12 +204,7 @@ int main() {
     execute_line(line, strdup(buffer.value));
   }
 
-  free_ordered_list(&background_process);
-  free(buffer.value);
-  free_tline(line);
-
-  printf("\n");
-  exit(0);
+  myShell_exit();
 }
 
 // -----
@@ -214,6 +213,9 @@ int main() {
 
 // initialize
 Bool initialize_myshell() {
+
+  signal(SIGINT, SIG_IGN);
+
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
   sa.sa_sigaction = handler_child_end;
@@ -247,6 +249,7 @@ Bool execute_line(tline *line, char *raw_line) {
   if (!line->background) return execute_command(
     line->commands, 
     line->ncommands, 
+    false,
     redirect
   );
 
@@ -261,6 +264,7 @@ Bool execute_line(tline *line, char *raw_line) {
     execute_command(
       line->commands,
       line->ncommands,
+      true,
       redirect
     );
     _exit(0);
@@ -275,6 +279,7 @@ Bool execute_line(tline *line, char *raw_line) {
 Bool execute_command(
   tcommand *commands,
   int ncommands,
+  Bool is_background,
   CommandRedirect redirect
 ) {
   int in = 0;
@@ -289,6 +294,8 @@ Bool execute_command(
       fprintf(stderr, "%s\n", ERROR_FORK);
     } 
     else if (pid == 0) {
+      if (!is_background) signal(SIGINT, SIG_DFL);
+
       close(fd[0]);
 
       if (isMyShellCommand(commands[i].argv[0])) {
@@ -432,8 +439,13 @@ Bool myShell_umask(Array argv) {
   return true;
 }
 
-Bool myShell_exit(Array argv) {
-  return true;
+Bool myShell_exit() {
+  free_ordered_list(&background_process);
+  free(buffer.value);
+  free_tline(line);
+
+  printf("\n");
+  exit(0);
 }
 
 // extension parser
