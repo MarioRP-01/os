@@ -409,6 +409,22 @@ Bool myShell_jobs(Array argv) {
 }
 
 Bool myShell_fg(Array argv) {
+  if (argv.size != 2) {
+    fprintf(stderr, "%s\n", ERROR_WRONG_ARGUMENTS_FG);
+    return false;
+  }
+
+  int index = strtol(((char **)argv.value)[1], NULL, 10);
+  if (errno == EINVAL) {
+    fprintf(stderr, "%s\n", ERROR_WRONG_TYPE_ARGUMENTS_FG, errno);
+  }
+  ProcessData *process = get_process_by_index(background_process, index);
+  if (process == NULL) {
+    fprintf(stderr, "%s\n", ERROR_WRONG_INDEX_FG);
+    return false;
+  }
+  
+  waitpid(process->pid, NULL, 0);
   return true;
 }
 
