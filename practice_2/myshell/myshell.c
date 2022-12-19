@@ -169,7 +169,7 @@ Bool execute_command(
 Bool isMyShellCommand(char *command_name);
 Bool executeMyShellCommand(Array argv);
 Bool myShell_cd(Array argv);
-Bool myShell_jobs(Array argv);
+Bool myShell_jobs();
 Bool myShell_fg(Array argv);
 Bool myShell_umask(Array argv);
 Bool myShell_exit();
@@ -370,7 +370,7 @@ Bool executeMyShellCommand(Array argv) {
   }
 
   if (strcmp(((char **)argv.value)[0], MYSHELL_JOBS) == 0) {
-    return myShell_jobs(argv);
+    return myShell_jobs();
   }
 
   if (strcmp(((char **)argv.value)[0], MYSHELL_FG) == 0) {
@@ -382,7 +382,7 @@ Bool executeMyShellCommand(Array argv) {
   }
 
   if (strcmp(((char **)argv.value)[0], MYSHELL_EXIT) == 0) {
-    return myShell_exit(argv);
+    return myShell_exit();
   }
 
   return false;
@@ -410,7 +410,7 @@ Bool myShell_cd(Array argv) {
 return isSuccess;
 }
 
-Bool myShell_jobs(Array argv) {
+Bool myShell_jobs() {
   show_processes_list(background_process);
   return true;
 }
