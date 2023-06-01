@@ -95,6 +95,7 @@ typedef struct OrderedList ProcessesList;
 Bool insert_process_data(ProcessesList *list, ProcessData elem);
 Bool remove_process_data_by_index(ProcessesList *list, size_t index);
 Bool remove_process_data_by_pid(ProcessesList *list, pid_t pid);
+ProcessData *get_last_process(ProcessesList list);
 ProcessData *get_process_by_index(ProcessesList list, size_t index);
 ProcessData *get_process_by_pid(ProcessesList list, pid_t pid);
 void show_processes_list(ProcessesList list);
@@ -186,7 +187,6 @@ void free_tline(tline *line);
 void free_tcommand(tcommand *command);
 
 // handler
-
 static void handler_child_end(int sig, siginfo_t *si, void *ucontext);
 static void handler_sigint(int sig);
 
@@ -220,7 +220,7 @@ int main() {
 // initialize
 Bool initialize_myshell() {
 
-  signal(SIGINT, SIG_IGN);
+  signal(SIGINT, handler_sigint);
 
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
@@ -448,16 +448,26 @@ Bool myShell_jobs() {
 }
 
 Bool myShell_fg(Array argv) {
-  if (argv.size != 2) {
+  
+  if (1 > argv.size || argv.size > 2) {
     fprintf(stderr, "%s\n", ERROR_WRONG_ARGUMENTS_FG);
     return false;
   }
 
-  int index = strtol(((char **)argv.value)[1], NULL, 10);
-  if (errno == EINVAL) {
-    fprintf(stderr, "%s\n", ERROR_WRONG_TYPE_ARGUMENTS_FG, errno);
+  ProcessData *process = NULL;
+
+  if (argv.size == 1) {
+    process = get_last_process(background_process);
   }
-  ProcessData *process = get_process_by_index(background_process, index);
+  
+  if (argv.size == 2) {
+    int index = strtol(((char **)argv.value)[1], NULL, 10);
+    if (errno == EINVAL) {
+      fprintf(stderr, "%s\n", ERROR_WRONG_TYPE_ARGUMENTS_FG, errno);
+    }
+    process = get_process_by_index(background_process, index);
+  }
+
   if (process == NULL) {
     fprintf(stderr, "%s\n", ERROR_WRONG_INDEX_FG);
     return false;
@@ -688,6 +698,20 @@ Bool remove_process_data_by_pid(ProcessesList *list, pid_t pid) {
   return true;
 }
 
+ProcessData *get_last_process(ProcessesList list) {
+
+  pthread_mutex_lock(&list_mutex);
+
+  if (ordered_list_is_empty(list)) {
+    pthread_mutex_unlock(&list_mutex);
+    return NULL;
+  }
+
+  ProcessData * result = &list.last->value;
+  pthread_mutex_unlock(&list_mutex);
+  return result;
+}
+
 ProcessData *get_process_by_index(ProcessesList list, size_t index) {
 
   pthread_mutex_lock(&list_mutex);
@@ -706,7 +730,7 @@ ProcessData *get_process_by_index(ProcessesList list, size_t index) {
   }
 
   if (!isFound) {
-  pthread_mutex_unlock(&list_mutex);
+    pthread_mutex_unlock(&list_mutex);
     return NULL;
   }
 
