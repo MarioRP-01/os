@@ -27,6 +27,7 @@
 #define MYSHELL_CD "cd"
 #define ERROR_MANY_ARGUMENTS_CD "cd: Demasiados argumentos."
 #define ERROR_EXECUTION_CD "cd: Error. No se ha podido ejecutar correctamente. %d"
+#define ERROR_PIPES_CD "cd: Error. No se admiten pipes."
 
 #define MYSHELL_JOBS "jobs"
 #define MYSHELL_UMASK "umask"
@@ -168,6 +169,7 @@ Bool execute_command(
 // myshell function
 Bool isMyShellCommand(char *command_name);
 Bool executeMyShellCommand(Array argv);
+Bool is_cd_command_with_pipes(tline *line);
 Bool myShell_cd(Array argv);
 Bool myShell_jobs();
 Bool myShell_fg(Array argv);
@@ -239,6 +241,11 @@ Bool prompt(Array *buffer) {
 // Execute commands
 
 Bool execute_line(tline *line, char *raw_line) {
+
+  if (is_cd_command_with_pipes(line)) {
+    fprintf(stderr, "%s\n", ERROR_PIPES_CD);
+    return false;
+  }
 
   CommandRedirect redirect = {
     line->redirect_input,
@@ -386,6 +393,23 @@ Bool executeMyShellCommand(Array argv) {
   }
 
   return false;
+}
+
+Bool is_cd_command_with_pipes(tline *line) {
+  Bool is_cd_with_pipes = false;
+
+  if (line->ncommands < 2) return false;
+
+  int index = 0;
+  while (index < line->ncommands && !is_cd_with_pipes) {
+    is_cd_with_pipes = strcmp(
+        line->commands[index].argv[0],
+        MYSHELL_CD
+      ) == 0;
+    ++index;
+  }
+
+  return is_cd_with_pipes;
 }
 
 Bool myShell_cd(Array argv) {
