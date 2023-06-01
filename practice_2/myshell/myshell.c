@@ -598,12 +598,11 @@ Bool insert_process_data(ProcessesList *list, ProcessData elem) {
 Bool remove_process_data_by_index(ProcessesList *list, size_t index) {
 
   pthread_mutex_lock(&list_mutex);
+
   if (ordered_list_is_empty(*list)) {
     pthread_mutex_unlock(&list_mutex);
     return false;
   }
-
-  
 
   Node *pAux = list->init;
   Bool isFound;
@@ -679,9 +678,13 @@ Bool remove_process_data_by_pid(ProcessesList *list, pid_t pid) {
 }
 
 ProcessData *get_process_by_index(ProcessesList list, size_t index) {
-  if (ordered_list_is_empty(list)) return NULL;
 
   pthread_mutex_lock(&list_mutex);
+
+  if (ordered_list_is_empty(list)) {
+    pthread_mutex_unlock(&list_mutex);
+    return NULL;
+  }
 
   Node *pAux = list.init;
   Bool isFound;
@@ -691,15 +694,24 @@ ProcessData *get_process_by_index(ProcessesList list, size_t index) {
     pAux = pAux->next;
   }
 
+  if (!isFound) {
   pthread_mutex_unlock(&list_mutex);
-  if (!isFound) return NULL;
-  return &pAux->value;
+    return NULL;
+  }
+
+  ProcessData * result = &pAux->value;
+  pthread_mutex_unlock(&list_mutex);
+  return result;
 }
 
 ProcessData *get_process_by_pid(ProcessesList list, pid_t pid) {
 
   pthread_mutex_lock(&list_mutex);
-  if (ordered_list_is_empty(list)) return NULL;
+
+  if (ordered_list_is_empty(list)) {
+    pthread_mutex_unlock(&list_mutex);
+    return NULL;
+  }
 
   Node *pAux = list.init;
   Bool isFound;
@@ -710,8 +722,13 @@ ProcessData *get_process_by_pid(ProcessesList list, pid_t pid) {
   }
 
   pthread_mutex_unlock(&list_mutex);
-  if (!isFound) return NULL;
-  return &pAux->value;
+  if (!isFound) {
+    pthread_mutex_unlock(&list_mutex);
+    return NULL;
+  }
+  ProcessData * result = &pAux->value;
+  pthread_mutex_unlock(&list_mutex);
+  return result;
 }
 
 void show_processes_list(struct OrderedList list) {
