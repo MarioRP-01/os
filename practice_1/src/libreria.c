@@ -71,7 +71,7 @@ struct Stack new_stack(int length) {
   struct Stack stack;
   char ** store = malloc(length * sizeof(char *));
   stack.store = store;
-  
+
   for (int i = 0; i < length; i++) {
     stack.store[i] = NULL;
   }
