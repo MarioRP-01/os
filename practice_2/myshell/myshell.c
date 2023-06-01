@@ -158,6 +158,7 @@ Bool initialize_myshell();
 
 // prompt
 Bool prompt(Array *buffer);
+void printPrompt();
 
 // execute commands
 Bool execute_line(tline *line, char *raw_line);
@@ -187,6 +188,7 @@ void free_tcommand(tcommand *command);
 // handler
 
 static void handler_child_end(int sig, siginfo_t *si, void *ucontext);
+static void handler_sigint(int sig);
 
 tline *line;
 Array buffer;
@@ -233,11 +235,15 @@ Bool initialize_myshell() {
 // prompt
 
 Bool prompt(Array *buffer) {
+  printPrompt();
+  Bool isSuccess = getline((char **)&buffer->value, &buffer->size, stdin) != -1;
+  return isSuccess;
+}
+
+void printPrompt() {
   char *cwd = getcwd(NULL, (size_t)0);
   printf("%s %s >\n", PROMPT_SHELL, cwd);
-  Bool isSuccess = getline((char **)&buffer->value, &buffer->size, stdin) != -1;
   free(cwd);
-  return isSuccess;
 }
 
 // Execute commands
@@ -527,6 +533,11 @@ static void handler_child_end(int sig, siginfo_t *si, void *ucontext) {
   waitpid(si->si_pid, NULL, 0);
 
   remove_process_data_by_pid(&background_process, si->si_pid);
+}
+
+static void handler_sigint(int sig) {
+  printf("\n");
+  printPrompt();
 }
 
 // Processes
