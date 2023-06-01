@@ -2,4 +2,8 @@ myshell
 a.out
 .fleet
 .vscode
-example
+
+tests/*
+!tests/test
+
+

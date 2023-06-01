@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Crear un archivo de texto con algunos datos
+echo "manzana
+banana
+naranja
+pera" > frutas.txt
+
+# Usar cat para mostrar el contenido del archivo
+cat < frutas.txt
+
+# Usar grep para filtrar las frutas que contienen la letra "a"
+grep "a" < frutas.txt
+
+# Usar sort para ordenar las frutas alfabéticamente
+sort < frutas.txt
+
+# Usar pipes para combinar los comandos y redirigir la entrada y salida
+cat < frutas.txt | grep "a" | sort > frutas_con_a.txt
