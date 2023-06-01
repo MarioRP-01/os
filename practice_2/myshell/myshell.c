@@ -232,7 +232,7 @@ Bool initialize_myshell() {
 
 Bool prompt(Array *buffer) {
   char *cwd = getcwd(NULL, (size_t)0);
-  printf("%s %s > ", PROMPT_SHELL, cwd);
+  printf("%s %s >\n", PROMPT_SHELL, cwd);
   Bool isSuccess = getline((char **)&buffer->value, &buffer->size, stdin) != -1;
   free(cwd);
   return isSuccess;
